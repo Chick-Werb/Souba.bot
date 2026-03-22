@@ -6,14 +6,12 @@ import re
 from flask import Flask
 from threading import Thread
 
-# インテント設定
 intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# ランクごとの基本係数
 RANK_MULTIPLIERS = {
     'F': 2.45,
     'E': 2.5,
@@ -24,19 +22,16 @@ RANK_MULTIPLIERS = {
     'S': 2.75
 }
 
-# 祝福の宝石価格（初期値。メッセージで誰でも変更可能）
 BLESSING_GEM_PRICE = 1070
 
-# 係数補正関数（+3以下 +0.05、+4〜+5 補正なし、+6〜+8 -0.05、+9以上 -0.10）
 def get_adjusted_multiplier(rank, current_level, is_special=False):
     base = RANK_MULTIPLIERS[rank]
-    if is_special:  # 「お得」指定時は一律 -0.1
+    if is_special:
         return base - 0.10
-    
     if current_level <= 3:
         return base + 0.05
     elif current_level <= 5:
-        return base          # +4〜+5は補正なし
+        return base
     elif current_level <= 8:
         return base - 0.05
     else:
@@ -49,51 +44,50 @@ async def on_ready():
     await tree.sync()
     print("スラッシュコマンド同期完了")
 
-# おまけ /hello
-@tree.command(name="hello", description="挨拶＋現在の宝石価格確認")
+@tree.command(name="hello", description="挨拶＋宝石価格確認")
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(
-        f"ちくわだよ〜！\n"
-        f"祝福の宝石現在価格: **{BLESSING_GEM_PRICE:,} マー**\n"
-        f"変更したい時は「祝福1200」みたいに送ってね！（誰でもOK）",
+        f"ふむ、元気そうだな。何か食べていくか?\n"
+        f"祝福の宝石現在価格は… **{BLESSING_GEM_PRICE:,} マー**\n"
+        f"変更は「祝福1200」の様に言え。",
         ephemeral=True
     )
 
-# メイン処理
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    content = message.content.strip().upper()
+    content = message.content.strip()
 
-    # 祝福価格変更コマンド（誰でもOK）
-    if content.startswith("祝福"):
-        match = re.search(r"祝福(\d+)", content)
+    # 祝福価格変更
+    if content.upper().startswith("祝福"):
+        match = re.search(r"祝福(\d+)", content.upper())
         if match:
             try:
                 new_price = int(match.group(1))
-                if new_price < 0:
-                    return  # 無視
-                global BLESSING_GEM_PRICE
-                old = BLESSING_GEM_PRICE
-                BLESSING_GEM_PRICE = new_price
-                await message.channel.send(
-                    f"祝福の宝石価格を **{old:,} → {new_price:,} マー** に更新しました！"
-                )
+                if new_price >= 0:
+                    global BLESSING_GEM_PRICE
+                    old = BLESSING_GEM_PRICE
+                    BLESSING_GEM_PRICE = new_price
+                    await message.channel.send(f"宝石価格 {old:,} → {new_price:,} マーに更新！")
             except:
-                pass  # 無視
+                pass
         return
 
-    # 相場計算（入力形式チェックを緩く、全角＋対応）
-    # スペース削除＆全角＋を半角に変換して判定
-    clean_content = content.replace(" ", "").replace("＋", "+")
-    
-    if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
-        return  # 無視（エラーメッセージなし）
+    # 相場計算（入力チェックを緩く）
+    clean_content = re.sub(r'\s+', '', content.upper())  # スペース全削除
+    clean_content = clean_content.replace('＋', '+')     # 全角＋を半角に
 
-    # 「お得」フラグ（最後に「お得」が付いてるか）
-    is_special = clean_content.endswith("オトク") or clean_content.endswith("お得")
+    if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
+        return  # 無視
+
+    # 「お得」検知（末尾10文字以内に含まれてればOK）
+    tail = clean_content[-10:]
+    is_special = "お得" in tail or "オトク" in tail
+
+    # デバッグログ（Koyeb Logsで確認用）
+    print(f"受信: {content} | clean: {clean_content} | お得検知: {is_special}")
 
     try:
         rank = clean_content[0]
@@ -103,7 +97,7 @@ async def on_message(message):
         target_plus = int(plus_str)
 
         if target_plus < 0:
-            return  # 無視
+            return
 
         # 通常相場
         normal = float(base_price)
@@ -139,7 +133,7 @@ async def on_message(message):
 
         gem_price = round(gem)
 
-        # 安い方をメイン表示
+        # 安い方メイン
         if gem_price < normal_price:
             main_p = gem_price
             main_t = f"宝石{gem_count}個使用"
@@ -153,7 +147,6 @@ async def on_message(message):
             sub_t = f"宝石{gem_count}個使用"
             steps = normal_steps
 
-        # 応答
         res = f"**{rank}{base_price}+{target_plus} の相場**\n"
         res += f"→ **{main_p:,} マー** （{main_t}）\n"
         if sub_p != main_p:
@@ -165,9 +158,9 @@ async def on_message(message):
         await message.channel.send(res)
 
     except:
-        return  # エラー時は無視（メッセージなし）
+        return  # 無視
 
-# FlaskでKoyeb健康チェック対応
+# Flask健康チェック
 app = Flask(__name__)
 
 @app.route('/')
@@ -183,11 +176,9 @@ def run_flask():
 
 Thread(target=run_flask).start()
 
-# トークンは環境変数から取得
 TOKEN = os.getenv("TOKEN")
-
 if TOKEN is None:
-    print("警告: 環境変数 TOKEN が設定されていません")
+    print("警告: TOKEN 未設定")
     exit(1)
 
 client.run(TOKEN)
