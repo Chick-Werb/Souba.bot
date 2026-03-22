@@ -99,7 +99,7 @@ async def on_message(message):
         if target_plus < 0:
             return
 
-        # 通常相場
+               # 通常相場
         normal = float(base_price)
         normal_steps = [f"+0: {base_price}"]
         for lv in range(1, target_plus + 1):
@@ -109,13 +109,13 @@ async def on_message(message):
 
         normal_price = round(normal)
 
-        # 宝石使用相場
+        # 宝石使用相場（is_specialをここでも適用）
         gem = float(base_price)
         gem_steps = [f"+0: {base_price}"]
         gem_count = 0
 
         for lv in range(1, target_plus + 1):
-            coeff = get_adjusted_multiplier(rank, lv, is_special)
+            coeff = get_adjusted_multiplier(rank, lv, is_special)  # ← ここにis_special追加
             mul = gem * coeff
 
             if lv <= 3:
