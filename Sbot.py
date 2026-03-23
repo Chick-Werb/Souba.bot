@@ -1,6 +1,5 @@
 import discord
 from discord import app_commands
-import math
 import os
 import re
 from flask import Flask
@@ -13,13 +12,8 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 RANK_MULTIPLIERS = {
-    'F': 2.45,
-    'E': 2.5,
-    'D': 2.55,
-    'C': 2.6,
-    'B': 2.65,
-    'A': 2.7,
-    'S': 2.75
+    'F': 2.45, 'E': 2.5, 'D': 2.55, 'C': 2.6,
+    'B': 2.65, 'A': 2.7, 'S': 2.75
 }
 
 BLESSING_GEM_PRICE = 1070
@@ -42,14 +36,12 @@ async def on_ready():
     print(f"ログイン成功！ あるけみすと装備相場Bot")
     print(f"名前: {client.user}")
     await tree.sync()
-    print("スラッシュコマンド同期完了")
 
 @tree.command(name="hello", description="挨拶＋宝石価格確認")
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(
         f"ふむ、元気そうだな。何か食べていくか?\n"
-        f"祝福の宝石現在価格は… **{BLESSING_GEM_PRICE:,} マー**\n"
-        f"変更は「祝福1200」の様に言え。",
+        f"祝福の宝石現在価格は **{BLESSING_GEM_PRICE:,} マー**",
         ephemeral=True
     )
 
@@ -75,19 +67,16 @@ async def on_message(message):
                 pass
         return
 
-    # 相場計算（入力チェックを緩く）
-       # 相場計算（入力チェックを緩く、全角＋対応）
-    clean_content = re.sub(r'\s+', '', content.upper())  # スペース全削除
-    clean_content = clean_content.replace('＋', '+')     # 全角＋を半角に
+    # 相場計算（全角＋・スペース対応）
+    clean_content = re.sub(r'\s+', '', content.upper()).replace('＋', '+')
 
     if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
-        return  # 無視
+        return
 
-    # 「お得」検知（メッセージ全体に含まれてればOK + 末尾優先）
-    is_special = "お得" in content or "オトク" in content or "おとく" in content.lower()
+    # 「お得」検知（大幅強化）
+    is_special = any(x in content for x in ["お得", "オトク", "おとく"])
 
-    # デバッグログ（Koyeb Logsで確認用）
-    print(f"受信: {content} | clean: {clean_content} | お得検知: {is_special}")
+    print(f"受信: {content} | お得検知: {is_special}")  # デバッグ用
 
     try:
         rank = clean_content[0]
@@ -99,7 +88,7 @@ async def on_message(message):
         if target_plus < 0:
             return
 
-               # 通常相場
+        # 通常相場
         normal = float(base_price)
         normal_steps = [f"+0: {base_price}"]
         for lv in range(1, target_plus + 1):
@@ -109,19 +98,18 @@ async def on_message(message):
 
         normal_price = round(normal)
 
-        # 宝石使用相場（is_specialをここでも適用）
+        # 宝石使用相場（is_special適用）
         gem = float(base_price)
         gem_steps = [f"+0: {base_price}"]
         gem_count = 0
 
         for lv in range(1, target_plus + 1):
-            coeff = get_adjusted_multiplier(rank, lv, is_special)  # ← ここにis_special追加
+            coeff = get_adjusted_multiplier(rank, lv, is_special)
             mul = gem * coeff
 
             if lv <= 3:
-                gem_val = gem + BLESSING_GEM_PRICE
-                chosen = min(mul, gem_val)
-                if chosen == gem_val:
+                chosen = min(mul, gem + BLESSING_GEM_PRICE)
+                if chosen == gem + BLESSING_GEM_PRICE:
                     gem_count += 1
                     gem_steps.append(f"+{lv}: {gem:.0f} + {BLESSING_GEM_PRICE} = {chosen:.0f} (宝石)")
                 else:
@@ -133,39 +121,29 @@ async def on_message(message):
 
         gem_price = round(gem)
 
-        # 安い方メイン
+        # 安い方を返す
         if gem_price < normal_price:
             main_p = gem_price
             main_t = f"宝石{gem_count}個使用"
-            sub_p = normal_price
-            sub_t = "通常"
             steps = gem_steps
         else:
             main_p = normal_price
             main_t = "通常"
-            sub_p = gem_price
-            sub_t = f"宝石{gem_count}個使用"
             steps = normal_steps
 
         res = f"**{rank}{base_price}+{target_plus} の相場**\n"
         res += f"→ **{main_p:,} マー** （{main_t}）\n"
-        if sub_p != main_p:
-            res += f"　　（もう一方: {sub_p:,} マー）\n\n"
-
         res += "【詳細ステップ】\n" + "\n".join(steps) + "\n"
         res += f"最終: {main_p:,} マー"
 
         await message.channel.send(res)
 
-    except:
-        return  # 無視
+    except Exception as e:
+        print(f"エラー: {e}")  # ログに残すだけ
+        return
 
-# Flask健康チェック
+# Flask（健康チェック）
 app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "ちくわ相場Bot is alive!"
 
 @app.route('/health')
 def health():
@@ -177,8 +155,8 @@ def run_flask():
 Thread(target=run_flask).start()
 
 TOKEN = os.getenv("TOKEN")
-if TOKEN is None:
-    print("警告: TOKEN 未設定")
+if not TOKEN:
+    print("TOKEN未設定")
     exit(1)
 
 client.run(TOKEN)
