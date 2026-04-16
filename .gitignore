@@ -1,0 +1,9 @@
+# 不要なファイル・フォルダを無視
+7-Zip/
+Data/
+*.lnk
+*.url
+desktop.ini
+__pycache__/
+*.pyc
+.DS_Store
