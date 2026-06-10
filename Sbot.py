@@ -1,4 +1,4 @@
-import discord
+iimport discord
 from discord import app_commands
 import os
 import re
@@ -129,16 +129,15 @@ async def on_message(message):
             sub_t = f"宝石{gem_count}個使用"
             steps = normal_steps
 
-               res = f"**{rank}{base_price}+{target_plus} の相場**\n"
+        # E係数計算（祝福考慮後の最終価格で計算）
+        e_coeff = (main_p / base_price) ** (1 / target_plus)
+
+        res = f"**{rank}{base_price}+{target_plus} の相場**\n"
         res += f"→ **{main_p:,} マー** （{main_t}）\n"
         if sub_p != main_p:
             res += f"　　（もう一方: {sub_p:,} マー）\n\n"
 
         res += "【詳細ステップ】\n" + "\n".join(steps) + "\n"
-
-        # E係数計算（祝福の影響を考慮した最終価格で計算）
-        e_coeff = (main_p / base_price) ** (1 / target_plus)
-
         res += f"最終: {main_p:,} マー　**E係数: {e_coeff:.3f}**"
 
         await message.channel.send(res)
