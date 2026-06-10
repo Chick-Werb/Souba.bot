@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands, ui
+from discord import app_commands
 import os
 import re
 from flask import Flask
@@ -45,74 +45,6 @@ async def hello(interaction: discord.Interaction):
         ephemeral=True
     )
 
-# ======================
-# 係数調整ボタンView
-# ======================
-class CoefficientAdjustView(ui.View):
-    def __init__(self, rank: str, base_price: int, target_plus: int, is_special: bool):
-        super().__init__(timeout=180)
-        self.rank = rank
-        self.base_price = base_price
-        self.target_plus = target_plus
-        self.is_special = is_special
-        self.extra_adjust = 0.0
-
-    async def recalculate(self, interaction: discord.Interaction):
-        def get_coeff(level):
-            base = RANK_MULTIPLIERS[self.rank]
-            if self.is_special:
-                base -= 0.10
-            if level <= 3:
-                return base + 0.05 + self.extra_adjust
-            elif level <= 5:
-                return base + self.extra_adjust
-            elif level <= 8:
-                return base - 0.05 + self.extra_adjust
-            else:
-                return base - 0.10 + self.extra_adjust
-
-        normal = float(self.base_price)
-        for lv in range(1, self.target_plus + 1):
-            normal *= get_coeff(lv)
-
-        normal_price = round(normal)
-        e_coeff = (normal_price / self.base_price) ** (1 / self.target_plus) if self.target_plus > 0 else 0
-
-        await interaction.response.edit_message(
-            content=f"**調整後: {self.rank}{self.base_price}+{self.target_plus}**\n"
-                    f"→ **{normal_price:,} マー**\n"
-                    f"**E係数: {e_coeff:.3f}** (調整: {self.extra_adjust:+.2f})",
-            view=self
-        )
-
-    @ui.button(label="+0.05", style=discord.ButtonStyle.green)
-    async def plus005(self, interaction: discord.Interaction, button: ui.Button):
-        self.extra_adjust += 0.05
-        await self.recalculate(interaction)
-
-    @ui.button(label="-0.05", style=discord.ButtonStyle.red)
-    async def minus005(self, interaction: discord.Interaction, button: ui.Button):
-        self.extra_adjust -= 0.05
-        await self.recalculate(interaction)
-
-    @ui.button(label="+0.10", style=discord.ButtonStyle.green)
-    async def plus01(self, interaction: discord.Interaction, button: ui.Button):
-        self.extra_adjust += 0.10
-        await self.recalculate(interaction)
-
-    @ui.button(label="-0.10", style=discord.ButtonStyle.red)
-    async def minus01(self, interaction: discord.Interaction, button: ui.Button):
-        self.extra_adjust -= 0.10
-        await self.recalculate(interaction)
-
-    @ui.button(label="リセット", style=discord.ButtonStyle.gray, row=1)
-    async def reset(self, interaction: discord.Interaction, button: ui.Button):
-        self.extra_adjust = 0.0
-        await self.recalculate(interaction)
-
-# ======================
-# メイン処理
-# ======================
 @client.event
 async def on_message(message):
     if message.author == client.user:
@@ -195,7 +127,7 @@ async def on_message(message):
             main_t = "通常"
             steps = normal_steps
 
-        # E係数計算
+        # E係数計算（表示されているメイン価格を基準に）
         e_coeff = (main_p / base_price) ** (1 / target_plus) if target_plus > 0 else 0
 
         res = f"**{rank}{base_price}+{target_plus} の相場**\n"
@@ -206,9 +138,7 @@ async def on_message(message):
         res += "【詳細ステップ】\n" + "\n".join(steps) + "\n"
         res += f"最終: {main_p:,} マー　**E係数: {e_coeff:.3f}**"
 
-        # ボタン付きで送信
-        view = CoefficientAdjustView(rank, base_price, target_plus, is_special)
-        await message.channel.send(res, view=view)
+        await message.channel.send(res)
 
     except Exception as e:
         print(f"計算エラー: {e}")
