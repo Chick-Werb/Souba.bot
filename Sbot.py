@@ -18,10 +18,8 @@ RANK_MULTIPLIERS = {
 
 BLESSING_GEM_PRICE = 1070
 
-def get_adjusted_multiplier(rank, current_level, is_special=False):
+def get_adjusted_multiplier(rank, current_level):
     base = RANK_MULTIPLIERS[rank]
-    if is_special:
-        return base - 0.10
     if current_level <= 3:
         return base + 0.05
     elif current_level <= 5:
@@ -51,11 +49,11 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    content = message.content.strip()
+    content = message.content.strip().upper()
 
     # 祝福価格変更
-    if content.upper().startswith("祝福"):
-        match = re.search(r"祝福(\d+)", content.upper())
+    if content.startswith("祝福"):
+        match = re.search(r"祝福(\d+)", content)
         if match:
             try:
                 new_price = int(match.group(1))
@@ -68,35 +66,18 @@ async def on_message(message):
                 pass
         return
 
-    # 相場計算（入力チェックを緩く）
-    clean_content = re.sub(r'\s+', '', content.upper()).replace('＋', '+')
+    # 相場計算
+    clean_content = re.sub(r'\s+', '', content).replace('＋', '+')
 
     if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
         return
 
-    # 「お得」検知（全体検索で確実）
-    is_special = any(word in content for word in ["お得", "オトク", "おとく"])
-
-    # デバッグログ
-    print(f"受信: {content} | お得検知: {is_special}")
-
     try:
         rank = clean_content[0]
         rest = clean_content[1:]
-
-        # + で分割
-        plus_index = rest.find('+')
-        if plus_index == -1:
-            return
-
-        price_str = rest[:plus_index]
-        after_plus = rest[plus_index+1:]
-
-        # after_plus から数字だけ抽出（お得などが付いててもOK）
-        plus_str = ''.join(c for c in after_plus if c.isdigit())
-
+        price_str, plus_str = rest.split('+', 1)
         base_price = int(price_str)
-        target_plus = int(plus_str) if plus_str else 0
+        target_plus = int(plus_str)
 
         if target_plus < 0:
             return
@@ -105,7 +86,7 @@ async def on_message(message):
         normal = float(base_price)
         normal_steps = [f"+0: {base_price}"]
         for lv in range(1, target_plus + 1):
-            coeff = get_adjusted_multiplier(rank, lv, is_special)
+            coeff = get_adjusted_multiplier(rank, lv)
             normal *= coeff
             normal_steps.append(f"+{lv}: {normal:.0f} × {coeff:.2f} = {normal:.0f}")
 
@@ -117,7 +98,7 @@ async def on_message(message):
         gem_count = 0
 
         for lv in range(1, target_plus + 1):
-            coeff = get_adjusted_multiplier(rank, lv, is_special)
+            coeff = get_adjusted_multiplier(rank, lv)
             mul = gem * coeff
 
             if lv <= 3:
@@ -135,7 +116,6 @@ async def on_message(message):
 
         gem_price = round(gem)
 
-        # 安い方をメイン表示
         if gem_price < normal_price:
             main_p = gem_price
             main_t = f"宝石{gem_count}個使用"
@@ -159,7 +139,9 @@ async def on_message(message):
 
         await message.channel.send(res)
 
-    
+    except:
+        return
+
 # Flask健康チェック
 app = Flask(__name__)
 
