@@ -32,20 +32,26 @@ def get_adjusted_multiplier(rank, current_level, is_special=False):
         return base - 0.10
 
 # ======================
-# E係数逆算関数（宝石コストを無視して理論倍率を求める）
+# 祝福を考慮した理論E係数（二分探索）
 # ======================
-def calculate_e_coefficient(base_price, target_plus, final_price):
+def calculate_theoretical_e_coeff(base_price, target_plus, final_price, bless_price=1070):
     if target_plus <= 0:
         return 0.0
-    # 二分探索で係数を逆算
+
+    def calc_price(k):
+        price = float(base_price)
+        for i in range(1, target_plus + 1):
+            if i <= 3:
+                price = min(price * k, price + bless_price)
+            else:
+                price = price * k
+        return price
+
     low = 1.0
-    high = 5.0
-    for _ in range(50):  # 高精度
+    high = 4.0
+    for _ in range(60):
         mid = (low + high) / 2
-        calculated = base_price
-        for _ in range(target_plus):
-            calculated *= mid
-        if calculated < final_price:
+        if calc_price(mid) < final_price:
             low = mid
         else:
             high = mid
@@ -72,7 +78,17 @@ async def on_message(message):
     content = message.content.strip().upper()
 
     if content.startswith("祝福"):
-        # 祝福価格変更処理（省略）
+        match = re.search(r"祝福(\d+)", content)
+        if match:
+            try:
+                new_price = int(match.group(1))
+                if new_price >= 0:
+                    global BLESSING_GEM_PRICE
+                    old = BLESSING_GEM_PRICE
+                    BLESSING_GEM_PRICE = new_price
+                    await message.channel.send(f"宝石価格 {old:,} → {new_price:,} マーに更新！")
+            except:
+                pass
         return
 
     clean_content = re.sub(r'\s+', '', content).replace('＋', '+')
@@ -134,31 +150,16 @@ async def on_message(message):
             main_t = "通常"
             steps = normal_steps
 
-       # ======================
-# 祝福を考慮した理論E係数（二分探索）
-# ======================
-def calculate_theoretical_e_coeff(base_price, target_plus, final_price, bless_price=1070):
-    if target_plus <= 0:
-        return 0.0
+        # E係数計算（祝福考慮版）
+        e_coeff = calculate_theoretical_e_coeff(base_price, target_plus, main_p, BLESSING_GEM_PRICE)
 
-    def calc_price(k):
-        price = float(base_price)
-        for i in range(1, target_plus + 1):
-            if i <= 3:
-                price = min(price * k, price + bless_price)
-            else:
-                price = price * k
-        return price
+        res = f"**{rank}{base_price}+{target_plus} の相場**\n"
+        res += f"→ **{main_p:,} マー** （{main_t}）\n"
+        if gem_price != normal_price:
+            res += f"　　（もう一方: {normal_price:,} マー）\n\n"
 
-    low = 1.0
-    high = 4.0
-    for _ in range(60):  # 高精度
-        mid = (low + high) / 2
-        if calc_price(mid) < final_price:
-            low = mid
-        else:
-            high = mid
-    return (low + high) / 2
+        res += "【詳細ステップ】\n" + "\n".join(steps) + "\n"
+        res += f"最終: {main_p:,} マー　**E係数: {e_coeff:.4f}**"
 
         await message.channel.send(res)
 
@@ -166,7 +167,7 @@ def calculate_theoretical_e_coeff(base_price, target_plus, final_price, bless_pr
         print(f"計算エラー: {e}")
         return
 
-# Flask部分
+# Flask健康チェック
 app = Flask(__name__)
 
 @app.route('/health')
