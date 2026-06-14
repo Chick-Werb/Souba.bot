@@ -108,23 +108,25 @@ async def on_message(message):
             return
 
         # ==================== 通常相場 ====================
-        normal = float(base_price)                    # ← ここが超重要
+        normal = float(base_price)
         normal_steps = [f"+0: {base_price}"]
 
         for lv in range(1, target_plus + 1):
             coeff = get_adjusted_multiplier(rank, lv, is_special)
+            previous = normal
             normal *= coeff
-            normal_steps.append(f"+{lv}: {normal:.0f} × {coeff:.2f} = {normal:.0f}")
+            normal_steps.append(f"+{lv}: {previous:.0f} × {coeff:.2f} = {normal:.0f}")
 
         normal_price = round(normal)
 
         # ==================== 宝石使用相場 ====================
-        gem = float(base_price)                       # ← ここも重要
+        gem = float(base_price)
         gem_steps = [f"+0: {base_price}"]
         gem_count = 0
 
         for lv in range(1, target_plus + 1):
             coeff = get_adjusted_multiplier(rank, lv, is_special)
+            previous = gem
             mul = gem * coeff
 
             if lv <= 3:
@@ -132,12 +134,12 @@ async def on_message(message):
                 chosen = min(mul, gem_val)
                 if chosen == gem_val:
                     gem_count += 1
-                    gem_steps.append(f"+{lv}: {gem:.0f} + {BLESSING_GEM_PRICE} = {chosen:.0f} (宝石)")
+                    gem_steps.append(f"+{lv}: {previous:.0f} + {BLESSING_GEM_PRICE} = {chosen:.0f} (宝石)")
                 else:
-                    gem_steps.append(f"+{lv}: {gem:.0f} × {coeff:.2f} = {chosen:.0f}")
+                    gem_steps.append(f"+{lv}: {previous:.0f} × {coeff:.2f} = {chosen:.0f}")
             else:
                 chosen = mul
-                gem_steps.append(f"+{lv}: {gem:.0f} × {coeff:.2f} = {chosen:.0f}")
+                gem_steps.append(f"+{lv}: {previous:.0f} × {coeff:.2f} = {chosen:.0f}")
             gem = chosen
 
         gem_price = round(gem)
