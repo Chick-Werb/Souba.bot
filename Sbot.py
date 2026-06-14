@@ -107,7 +107,7 @@ async def on_message(message):
         if target_plus < 0:
             return
 
-         # ==================== 通常相場 ====================
+        # ==================== 通常相場 ====================
         normal = float(base_price)                    # ← ここが超重要
         normal_steps = [f"+0: {base_price}"]
 
@@ -117,9 +117,9 @@ async def on_message(message):
             normal_steps.append(f"+{lv}: {normal:.0f} × {coeff:.2f} = {normal:.0f}")
 
         normal_price = round(normal)
-        
-        # 宝石使用相場
-        gem = float(base_price)
+
+        # ==================== 宝石使用相場 ====================
+        gem = float(base_price)                       # ← ここも重要
         gem_steps = [f"+0: {base_price}"]
         gem_count = 0
 
